@@ -22,13 +22,14 @@ def login_form():
         if st.button("ログイン", use_container_width=True):
             # IDをメール形式に変換して認証
             email = l_id + VIRTUAL_DOMAIN
-            try:
-                res = supabase.auth.sign_in_with_password({"email": email, "password": l_pw})
-                if res.user:
-                    st.session_state.user = res.user
-                    st.rerun()
-            except:
-                st.error("IDまたはパスワードが正しくありません。")
+        try:
+            res = supabase.auth.sign_in_with_password({"email": email, "password": l_pw})
+            if res.user:
+                st.session_state.user = res.user
+                st.rerun()
+        except Exception as e:
+            # ここが重要！具体的なエラー内容（例: Email not confirmed など）を表示させます
+            st.error(f"詳細エラー: {e}")
 
     with auth_mode[1]:
         r_id = st.text_input("希望するユーザーID", key="r_id", help="英数字のみ")
