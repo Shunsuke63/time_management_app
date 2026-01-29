@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from datetime import timezone, timedelta
 from supabase import create_client, Client
 
 # --- 1. Supabase接続設定 ---
@@ -8,10 +9,9 @@ url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-# 仮想ドメイン（ユーザーには見せません）
 VIRTUAL_DOMAIN = "@student.app"
 
-# --- 2. 認証ロジック (ID & Pass) ---
+# --- 2. 認証ロジック ---
 def login_form():
     st.title("🎓 空きコマ共有アプリ")
     auth_mode = st.tabs(["ログイン", "新規登録"])
@@ -21,16 +21,13 @@ def login_form():
         l_pw = st.text_input("パスワード", type="password", key="l_pw")
         
         if st.button("ログイン", use_container_width=True):
-            # 1. 最初にemail変数を定義（tryの外側で行うのが安全）
             email = l_id + VIRTUAL_DOMAIN
             try:
-                # 2. 認証リクエスト
                 res = supabase.auth.sign_in_with_password({"email": email, "password": l_pw})
                 if res.user:
                     st.session_state.user = res.user
                     st.rerun()
             except Exception as e:
-                # 3. email変数が確実に存在するため、詳細なエラーを表示できます
                 st.error(f"ログインに失敗しました。詳細: {e}")
 
     with auth_mode[1]:
@@ -42,7 +39,6 @@ def login_form():
             if not r_id or not r_pw or not r_name:
                 st.warning("すべての項目を入力してください。")
             else:
-                # ここでも email を先に定義
                 email = r_id + VIRTUAL_DOMAIN
                 try:
                     res = supabase.auth.sign_up({"email": email, "password": r_pw})
@@ -56,7 +52,6 @@ def login_form():
                 except Exception as e:
                     st.error(f"登録エラー: {e}")
 
-# セッション管理
 if "user" not in st.session_state:
     st.session_state.user = None
 
@@ -75,14 +70,19 @@ if st.sidebar.button("ログアウト"):
     st.session_state.user = None
     st.rerun()
 
-# --- 以降、時間割・ホーム・検索機能 (前回のロジックと同じ) ---
+# --- 判定ロジックの修正 ---
 DAYS = ["月", "火", "水", "木", "金"]
 PERIODS_LIST = [1, 2, 3, 4, 5]
-PERIODS_TIME = {1: ("09:00", "10:30"), 2: ("10:40", "12:10"), 3: ("13:00", "14:30"), 4: ("14:40", "16:10"), 5: ("16:20", "17:50")}
+PERIODS_TIME = {1: ("08:40", "10:10"), 2: ("10:25", "11:55"), 3: ("12:55", "14:25"), 4: ("14:40", "16:10"), 5: ("16:25", "17:55")}
 
 def get_current_info():
-    now = datetime.datetime.now()
-    weekday = ["月", "火", "水", "木", "金", "土", "日"][now.weekday()]
+    # 日本標準時 (UTC+9) のタイムゾーンオブジェクトを作成
+    JST = timezone(timedelta(hours=+9))
+    # 本番環境(UTC)でも日本時間を取得
+    now = datetime.datetime.now(JST)
+    
+    weekday_list = ["月", "火", "水", "木", "金", "土", "日"]
+    weekday = weekday_list[now.weekday()]
     curr_time = now.strftime("%H:%M")
     curr_p = next((p for p, (s, e) in PERIODS_TIME.items() if s <= curr_time <= e), None)
     return weekday, curr_p
@@ -105,7 +105,6 @@ with tab1:
     curr_day, curr_p = get_current_info()
     st.write(f"📅 **{curr_day}曜日 {f'{curr_p}限' if curr_p else '（時間外）'}**")
 
-    # リレーションを使って全ユーザーのスケジュールを取得
     all_users = supabase.table("profiles").select("name, status, schedules(day, period)").execute().data
 
     col_busy, col_free = st.columns(2)
