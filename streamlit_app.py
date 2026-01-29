@@ -19,20 +19,22 @@ def login_form():
     with auth_mode[0]:
         l_id = st.text_input("ユーザーID", key="l_id")
         l_pw = st.text_input("パスワード", type="password", key="l_pw")
+        
         if st.button("ログイン", use_container_width=True):
-            # IDをメール形式に変換して認証
+            # 1. 最初にemail変数を定義（tryの外側で行うのが安全）
             email = l_id + VIRTUAL_DOMAIN
-        try:
-            res = supabase.auth.sign_in_with_password({"email": email, "password": l_pw})
-            if res.user:
-                st.session_state.user = res.user
-                st.rerun()
-        except Exception as e:
-            # ここが重要！具体的なエラー内容（例: Email not confirmed など）を表示させます
-            st.error(f"詳細エラー: {e}")
+            try:
+                # 2. 認証リクエスト
+                res = supabase.auth.sign_in_with_password({"email": email, "password": l_pw})
+                if res.user:
+                    st.session_state.user = res.user
+                    st.rerun()
+            except Exception as e:
+                # 3. email変数が確実に存在するため、詳細なエラーを表示できます
+                st.error(f"ログインに失敗しました。詳細: {e}")
 
     with auth_mode[1]:
-        r_id = st.text_input("希望するユーザーID", key="r_id", help="英数字のみ")
+        r_id = st.text_input("希望するユーザーID", key="r_id")
         r_name = st.text_input("表示名（大学での名前など）", key="r_name")
         r_pw = st.text_input("パスワード設定", type="password", key="r_pw")
         
@@ -40,20 +42,19 @@ def login_form():
             if not r_id or not r_pw or not r_name:
                 st.warning("すべての項目を入力してください。")
             else:
+                # ここでも email を先に定義
                 email = r_id + VIRTUAL_DOMAIN
                 try:
-                    # サインアップ
                     res = supabase.auth.sign_up({"email": email, "password": r_pw})
                     if res.user:
-                        # プロフィール作成
                         supabase.table("profiles").upsert({
                             "id": res.user.id,
                             "name": r_name,
                             "status": "登録しました！"
                         }).execute()
-                        st.success("登録完了！ログインしてください。")
+                        st.success("登録完了！そのままログインしてください。")
                 except Exception as e:
-                    st.error("このIDは既に使用されている可能性があります。")
+                    st.error(f"登録エラー: {e}")
 
 # セッション管理
 if "user" not in st.session_state:
